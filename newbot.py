@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 """
-🔥 SHIKAARI BOSS + RGB MATCHING BOT - 1 MIN WINGO
-🧠 SHIKAARI BOSS: Last-1 (Normal) + 11-Last (Repeat)
+🔥 GURU + RGB MATCHING BOT - 1 MIN WINGO
+🧠 GURU: Period Digit Sum Based
 🎨 RGB: 12-Step Pattern (Time-based)
-✅ MATCH = SHIKAARI BOSS + RGB মিললে প্রেডিকশন
+✅ MATCH = GURU + RGB মিললে প্রেডিকশন
 ❌ NO MATCH = শুধু রেজাল্ট দেখাবে
 """
 
@@ -34,7 +34,7 @@ class DummyServer(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"SHIKAARI BOSS + RGB BOT is running!")
+        self.wfile.write(b"GURU + RGB MATCHING BOT is running!")
 
 def run_dummy_server():
     port = int(os.environ.get("PORT", 8080))
@@ -81,43 +81,44 @@ hourly_worst_loss_streak = 0
 last_predicted_period = None
 last_predicted_signal = None
 last_predicted_num = None
-last_match_status = None  # 'match' বা 'no_match'
+last_match_status = None
 prediction_sent_for_period = {}
 last_result_sent = False
 
 # ============================================================
-# 🧠 SHIKAARI BOSS ENGINE
+# 🧠 GURU ENGINE
 # ============================================================
-def shikaari_boss_engine(history_numbers):
+def guru_engine(period_number):
     """
-    NORMAL RULE: Last Number − 1
-    REPEAT RULE: যদি শেষ ২টি একই হয় → 11 − Last Number
+    GURU: Period number digit sum based
+    - Digit sum % 10 >= 5 → BIG
+    - Digit sum % 10 < 5  → SMALL
     """
-    if len(history_numbers) < 2:
-        return None
+    str_period = str(period_number)
+    digit_sum = sum(int(c) for c in str_period if c.isdigit())
+    remainder = digit_sum % 10
+    pred = "BIG" if remainder >= 5 else "SMALL"
     
-    last = history_numbers[0]
-    prev = history_numbers[1]
-    
-    # REPEAT RULE
-    if last == prev:
-        result = 11 - last
-        if result > 9:
-            result = result - 10
-        rule = "REPEAT (11-L)"
+    # Confidence
+    if pred == "BIG":
+        conf = 70 + (remainder - 5) * 3
     else:
-        # NORMAL RULE
-        result = last - 1
-        if result < 0:
-            result = 9
-        rule = "NORMAL (L-1)"
+        conf = 70 + (4 - remainder) * 3
+    conf = min(95, max(55, conf))
+    
+    # Number prediction
+    if pred == "BIG":
+        num = 5 + (remainder % 5)  # 5-9
+    else:
+        num = remainder % 5  # 0-4
     
     return {
-        "prediction": "BIG" if result >= 5 else "SMALL",
-        "number": result,
-        "rule": rule,
-        "last": last,
-        "prev": prev
+        "prediction": pred,
+        "number": num,
+        "confidence": conf,
+        "reason": f"GURU (Remainder: {remainder})",
+        "digit_sum": digit_sum,
+        "remainder": remainder
     }
 
 # ============================================================
@@ -149,34 +150,25 @@ def rgb_engine():
         "prediction": pred["s"],
         "number": pred["n"],
         "confidence": 85,
-        "reason": f"RGB PATTERN [Idx:{pattern_index}]",
+        "reason": f"RGB (Idx: {pattern_index})",
         "pattern_index": pattern_index
     }
 
 # ============================================================
-# 🔥 MASTER MATCHING ENGINE (SHIKAARI BOSS + RGB)
+# 🔥 MASTER MATCHING ENGINE (GURU + RGB)
 # ============================================================
-def master_matching_engine(history_numbers):
-    shikaari = shikaari_boss_engine(history_numbers)
+def master_matching_engine(period_number):
+    guru = guru_engine(period_number)
     rgb = rgb_engine()
 
-    if shikaari is None:
-        return {
-            'matched': False,
-            'shikaari': None,
-            'rgb': rgb,
-            'status': "❌ INSUFFICIENT DATA",
-            'status_icon': "🔴"
-        }
-
-    if shikaari['prediction'] == rgb['prediction']:
+    if guru['prediction'] == rgb['prediction']:
         # MATCH!
         return {
             'matched': True,
-            'prediction': shikaari['prediction'],
-            'number': shikaari['number'],
-            'confidence': 88,
-            'shikaari': shikaari,
+            'prediction': guru['prediction'],
+            'number': guru['number'],
+            'confidence': int((guru['confidence'] + rgb['confidence']) / 2),
+            'guru': guru,
             'rgb': rgb,
             'status': "✅ MATCH FOUND",
             'status_icon': "🟢"
@@ -185,10 +177,10 @@ def master_matching_engine(history_numbers):
         # NO MATCH
         return {
             'matched': False,
-            'prediction': shikaari['prediction'],
-            'number': shikaari['number'],
-            'confidence': 70,
-            'shikaari': shikaari,
+            'prediction': guru['prediction'],
+            'number': guru['number'],
+            'confidence': guru['confidence'],
+            'guru': guru,
             'rgb': rgb,
             'status': "❌ NO MATCH",
             'status_icon': "🔴"
@@ -231,7 +223,7 @@ async def send_hourly_report():
     match_win_rate = (match_wins / match_rounds * 100) if match_rounds > 0 else 0
 
     report_msg = (
-        f"📊 *HOURLY REPORT - SHIKAARI + RGB*\n"
+        f"📊 *HOURLY REPORT - GURU + RGB*\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"🕐 *TIME:* {datetime.now().strftime('%I:%M %p')}\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -251,7 +243,7 @@ async def send_hourly_report():
         f"❌ *TOTAL LOSSES:* `{total_losses}`\n"
         f"💎 *JACKPOTS:* `{total_jackpots}`\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"⚡ SHIKAARI BOSS + RGB BOT"
+        f"⚡ GURU + RGB BOT"
     )
 
     await send_message(report_msg)
@@ -272,19 +264,20 @@ async def prediction_bot():
     global last_match_status, prediction_sent_for_period, last_result_sent
     global match_wins, match_losses, match_rounds, no_match_rounds
 
-    print("🔥 SHIKAARI BOSS + RGB MATCHING BOT STARTED...")
-    print("🧠 ENGINE 1: SHIKAARI BOSS (Last-1 / 11-Last)")
+    print("🔥 GURU + RGB MATCHING BOT STARTED...")
+    print("🧠 ENGINE 1: GURU (Period Digit Sum)")
     print("🎨 ENGINE 2: RGB 12-STEP PATTERN")
     print("✅ MATCH = Send Prediction + Result")
     print("❌ NO MATCH = Send Result Only")
     print("📡 MODE: 1 MIN WINGO")
 
     await send_message(
-        "🔥 *SHIKAARI BOSS + RGB MATCHING BOT* 🔥\n"
+        "🔥 *GURU + RGB MATCHING BOT* 🔥\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "🧠 *SHIKAARI BOSS ENGINE:*\n"
-        "📌 NORMAL: Last − 1\n"
-        "📌 REPEAT: 11 − Last\n"
+        "🧠 *GURU ENGINE:*\n"
+        "📌 Period Digit Sum Based\n"
+        "📌 Sum % 10 ≥ 5 = BIG\n"
+        "📌 Sum % 10 < 5 = SMALL\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "🎨 *RGB ENGINE:* 12-Step Time Pattern\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
@@ -309,7 +302,6 @@ async def prediction_bot():
                 continue
 
             history_data = []
-            history_numbers = []
             for h in raw_list[:20]:
                 num = int(h['number'])
                 history_data.append({
@@ -317,7 +309,6 @@ async def prediction_bot():
                     'number': num,
                     'side': "BIG" if num >= 5 else "SMALL"
                 })
-                history_numbers.append(num)
 
             latest = history_data[0]
             latest_issue = latest['issueNumber']
@@ -391,7 +382,7 @@ async def prediction_bot():
                         f"💎 JACKPOTS: `{total_jackpots}`\n"
                         f"{streak_emoji} STREAK: `{current_streak:+d}`\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"⚡ SHIKAARI + RGB BOT"
+                        f"⚡ GURU + RGB BOT"
                     )
 
                     await send_message(result_msg)
@@ -409,7 +400,7 @@ async def prediction_bot():
                         f"━━━━━━━━━━━━━━━━━━━━\n"
                         f"❌ NO MATCH - Prediction Skipped\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"⚡ SHIKAARI + RGB BOT"
+                        f"⚡ GURU + RGB BOT"
                     )
 
                     await send_message(result_msg)
@@ -429,7 +420,7 @@ async def prediction_bot():
             next_period = str(int(latest_issue) + 1)
 
             if not prediction_sent_for_period.get(next_period, False):
-                pred = master_matching_engine(history_numbers)
+                pred = master_matching_engine(next_period)
 
                 last_match_status = 'match' if pred['matched'] else 'no_match'
 
@@ -438,7 +429,7 @@ async def prediction_bot():
                 if pred['matched']:
                     # ============ MATCH FOUND - প্রেডিকশন পাঠাবে ============
                     prediction_msg = (
-                        f"🔥 *SHIKAARI + RGB - 1M WINGO* 🔥\n"
+                        f"🔥 *GURU + RGB - 1M WINGO* 🔥\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
                         f"🆔 PERIOD: `#{next_period[-5:]}`\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -448,16 +439,16 @@ async def prediction_bot():
                         f"🔢 TARGET NUMBER: `{pred['number']}`\n"
                         f"⚡ CONFIDENCE: `{pred['confidence']}%`\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"🧠 SHIKAARI: `{pred['shikaari']['prediction']}` ({pred['shikaari']['rule']})\n"
+                        f"🧠 GURU: `{pred['guru']['prediction']}` ({pred['guru']['reason']})\n"
                         f"🎨 RGB: `{pred['rgb']['prediction']}` ({pred['rgb']['reason']})\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"📊 LAST: `{pred['shikaari']['last']}` | PREV: `{pred['shikaari']['prev']}`\n"
+                        f"📊 DIGIT SUM: `{pred['guru']['digit_sum']}` | REM: `{pred['guru']['remainder']}`\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
                         f"{streak_emoji} STREAK: `{current_streak:+d}`\n"
-                        f"❌ CONSECUTIVE LOSSES: `{consecutive_losses}`\n"
+                        f"📈 WIN RATE: `{(total_wins/total_rounds*100) if total_rounds > 0 else 0:.1f}%`\n"
                         f"━━━━━━━━━━━━━━━━━━━━\n"
                         f"⏳ RESULT AWAITING...\n"
-                        f"⚡ SHIKAARI + RGB BOT"
+                        f"⚡ GURU + RGB BOT"
                     )
 
                     last_predicted_period = next_period
@@ -471,29 +462,19 @@ async def prediction_bot():
 
                 else:
                     # ============ NO MATCH - প্রেডিকশন পাঠাবে না ============
-                    if pred['shikaari'] is not None:
-                        no_match_msg = (
-                            f"❌ *NO MATCH*\n"
-                            f"━━━━━━━━━━━━━━━━━━━━\n"
-                            f"🆔 PERIOD: `#{next_period[-5:]}`\n"
-                            f"━━━━━━━━━━━━━━━━━━━━\n"
-                            f"🧠 SHIKAARI: `{pred['shikaari']['prediction']}` ({pred['shikaari']['rule']})\n"
-                            f"🎨 RGB: `{pred['rgb']['prediction']}` ({pred['rgb']['reason']})\n"
-                            f"━━━━━━━━━━━━━━━━━━━━\n"
-                            f"❌ NO MATCH FOUND\n"
-                            f"⏳ RESULT WILL BE SHOWN...\n"
-                            f"━━━━━━━━━━━━━━━━━━━━\n"
-                            f"⚡ SHIKAARI + RGB BOT"
-                        )
-                    else:
-                        no_match_msg = (
-                            f"⚠️ *DATA INSUFFICIENT*\n"
-                            f"━━━━━━━━━━━━━━━━━━━━\n"
-                            f"🆔 PERIOD: `#{next_period[-5:]}`\n"
-                            f"⚠️ Not enough data to analyze\n"
-                            f"━━━━━━━━━━━━━━━━━━━━\n"
-                            f"⚡ SHIKAARI + RGB BOT"
-                        )
+                    no_match_msg = (
+                        f"❌ *NO MATCH*\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🆔 PERIOD: `#{next_period[-5:]}`\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🧠 GURU: `{pred['guru']['prediction']}` ({pred['guru']['reason']})\n"
+                        f"🎨 RGB: `{pred['rgb']['prediction']}` ({pred['rgb']['reason']})\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"❌ NO MATCH FOUND\n"
+                        f"⏳ RESULT WILL BE SHOWN...\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"⚡ GURU + RGB BOT"
+                    )
 
                     last_predicted_period = next_period
                     last_predicted_signal = None
@@ -514,9 +495,9 @@ async def prediction_bot():
 
 # ==================== স্টার্ট ====================
 if __name__ == '__main__':
-    print("🔥 SHIKAARI BOSS + RGB MATCHING BOT")
+    print("🔥 GURU + RGB MATCHING BOT")
     print("━━━━━━━━━━━━━━━━━━━━")
-    print("🧠 SHIKAARI: Last-1 / 11-Last")
+    print("🧠 GURU: Period Digit Sum Based")
     print("🎨 RGB: 12-Step Pattern")
     print("✅ MATCH = Send Prediction + Result")
     print("❌ NO MATCH = Send Result Only")
